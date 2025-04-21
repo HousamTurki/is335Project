@@ -17,6 +17,7 @@ def get_db_connection():
     conn.autocommit = False
     return conn
 
+
 class Ride:
     def __init__(self, rider_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng):
         self.ride_id = str(uuid.uuid4())
@@ -58,38 +59,26 @@ class Ride:
             surge_area = cursor.fetchone()
             if surge_area:
                 price *= float(surge_area['SurgeMultiplier'])
+                area_id = surge_area['AreaID']
+            else:
+                area_id = None
 
             cursor.execute("""
                 INSERT INTO "Ride" (
-                    "RideID",
-                    "RiderID",
-                    "Status",
-                    "PickupLocation",
-                    "DropOffLocation",
-                    "StartTime",
-                    "Route",
-                    "Distance",
-                    "Duration",
-                    "Price"
+                    "RideID", "RiderID", "Status",
+                    "PickupLocation", "DropOffLocation", "StartTime",
+                    "Route", "Distance", "Duration", "Price", "AreaID"
                 ) VALUES (
                     %s, %s, %s,
                     ST_SetSRID(ST_GeomFromText(%s), 4326),
                     ST_SetSRID(ST_GeomFromText(%s), 4326),
-                    %s,
-                    %s,
-                    %s, %s, %s
+                    %s, %s, %s, %s, %s, %s
                 ) RETURNING "RideID";
             """, (
-                self.ride_id,
-                self.rider_id,
-                self.status,
-                pickup_point,
-                dropoff_point,
-                datetime.datetime.now(),
-                0.0,
-                distance,
-                duration,
-                price
+                self.ride_id, self.rider_id, self.status,
+                pickup_point, dropoff_point,
+                datetime.datetime.now(), 0.0,
+                distance, duration, price, area_id
             ))
             db_ride_id = cursor.fetchone()['RideID']
 
@@ -113,14 +102,9 @@ class Ride:
 
             for driver in nearby_drivers:
                 cursor.execute("""
-                    INSERT INTO "AvailableDrivers" (
-                        "RideID", "DriverID", "Response"
-                    ) VALUES (%s, %s, %s);
-                """, (
-                    self.ride_id,
-                    driver['DriverID'],
-                    'pending'
-                ))
+                    INSERT INTO "AvailableDrivers" ("RideID", "DriverID", "Response")
+                    VALUES (%s, %s, %s);
+                """, (self.ride_id, driver['DriverID'], 'pending'))
 
             conn.commit()
             return {
@@ -137,6 +121,7 @@ class Ride:
         finally:
             cursor.close()
             conn.close()
+
 
 class Driver:
     def __init__(self, driver_id):
